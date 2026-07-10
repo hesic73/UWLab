@@ -246,6 +246,10 @@ class check_reset_state_success(ManagerTermBase):
 
         # Initialize stability counter for consecutive stability checking
         self.stability_counter = torch.zeros(env.num_envs, device=env.device, dtype=torch.int32)
+        # Event terms write reset poses directly to simulation before manager
+        # buffers are refreshed. Capture the reference poses on the first
+        # termination evaluation after reset, when those writes are visible.
+        self._pending_initial_pose_capture = torch.ones(env.num_envs, device=env.device, dtype=torch.bool)
 
         self.object_assets = [env.scene[cfg.name] for cfg in self.object_cfgs]
         self.robot_asset = env.scene[self.robot_cfg.name]
@@ -295,8 +299,10 @@ class check_reset_state_success(ManagerTermBase):
 
         if env_ids is None:
             self.stability_counter.zero_()
+            self._pending_initial_pose_capture.fill_(True)
         else:
             self.stability_counter[env_ids] = 0
+            self._pending_initial_pose_capture[env_ids] = True
 
         if self.assembly_success_prob is not None:
             if env_ids is None:
@@ -332,6 +338,16 @@ class check_reset_state_success(ManagerTermBase):
 
         # Check time out
         time_out = env.episode_length_buf >= env.max_episode_length
+
+        pending_ids = torch.where(self._pending_initial_pose_capture)[0]
+        if pending_ids.numel() > 0:
+            for asset in self.assets_to_check:
+                if asset is self.robot_asset:
+                    asset_pos = asset.data.body_link_pos_w[:, self.ee_body_idx]
+                else:
+                    asset_pos = asset.data.root_pos_w
+                asset.initial_pos[pending_ids] = asset_pos[pending_ids].clone()
+            self._pending_initial_pose_capture[pending_ids] = False
 
         # Check for abnormal gripper state (excessive joint velocities)
         abnormal_gripper_state = (
@@ -461,12 +477,12 @@ class check_obb_no_overlap_termination(ManagerTermBase):
 
         # Compute OBB in world frame using Isaac Sim's built-in functions
         insertive_centroid_world, insertive_axes_world, insertive_half_extents = bounds_utils.compute_obb(
-            self._bbox_cache, insertive_prim_path
+            insertive_prim_path, bbox_cache=self._bbox_cache
         )
 
         # Get current world pose of object (env 0) to convert OBB to body frame
-        insertive_pos_world = self.insertive_object.data.root_pos_w[0]  # (3,)
-        insertive_quat_world = self.insertive_object.data.root_quat_w[0]  # (4,)
+        insertive_pos_world = self.insertive_object.data.root_pos_w.torch[0]  # (3,)
+        insertive_quat_world = self.insertive_object.data.root_quat_w.torch[0]  # (4,)
 
         device = self._env.device
 
@@ -495,8 +511,8 @@ class check_obb_no_overlap_termination(ManagerTermBase):
         """Store initial pose of insertive object when environments are reset."""
         super().reset(env_ids)
 
-        insertive_pos = self.insertive_object.data.root_pos_w.clone()
-        insertive_quat = self.insertive_object.data.root_quat_w.clone()
+        insertive_pos = self.insertive_object.data.root_pos_w.torch.clone()
+        insertive_quat = self.insertive_object.data.root_quat_w.torch.clone()
 
         if self._insertive_initial_pos is None or self._insertive_initial_quat is None or env_ids is None:
             # First time initialization or reset all environments
@@ -547,8 +563,8 @@ class check_obb_no_overlap_termination(ManagerTermBase):
         draw_interface.clear_lines()
 
         # Get current world poses of insertive object for all environments
-        insertive_pos = self.insertive_object.data.root_pos_w  # (num_envs, 3)
-        insertive_quat = self.insertive_object.data.root_quat_w  # (num_envs, 4)
+        insertive_pos = self.insertive_object.data.root_pos_w.torch  # (num_envs, 3)
+        insertive_quat = self.insertive_object.data.root_quat_w.torch  # (num_envs, 4)
 
         # Transform current insertive object OBB centroid from body frame to world coordinates for all environments
         insertive_obb_centroid_body = self._insertive_obb_centroid
@@ -685,8 +701,8 @@ class check_obb_no_overlap_termination(ManagerTermBase):
         """Check if OBB overlap condition is violated between initial and current insertive object positions."""
 
         # Get current world poses of insertive object for all environments
-        insertive_pos = self.insertive_object.data.root_pos_w  # (num_envs, 3)
-        insertive_quat = self.insertive_object.data.root_quat_w  # (num_envs, 4)
+        insertive_pos = self.insertive_object.data.root_pos_w.torch  # (num_envs, 3)
+        insertive_quat = self.insertive_object.data.root_quat_w.torch  # (num_envs, 4)
 
         # Transform current insertive object centroid from body frame to world coordinates for all environments
         insertive_obb_centroid_body = self._insertive_obb_centroid

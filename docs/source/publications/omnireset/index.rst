@@ -282,6 +282,7 @@ The full OmniReset pipeline from custom task creation to real-robot deployment:
 
 - :doc:`new_task` -- Prepare USD assets, register object variants, verify in sim.
 - :doc:`rl_training` -- Collect reset states and train an RL policy from scratch. **Start here for most use cases.**
+- :doc:`isaac_sim_6_reproduction` -- Isaac Sim 6 single-GPU migration and Cube pipeline validation record.
 - :doc:`sim2real` -- Robot calibration & USD, system identification, camera calibration, then ADR finetuning, or use our pre-finetuned checkpoints.
 - :doc:`distillation` -- Evaluate pretrained RGB checkpoints, or collect demos and train your own ResNet18-MLP vision policy. Deploy on real robot.
 
@@ -291,6 +292,7 @@ The full OmniReset pipeline from custom task creation to real-robot deployment:
 
    new_task
    rl_training
+   isaac_sim_6_reproduction
    sim2real
    distillation
 

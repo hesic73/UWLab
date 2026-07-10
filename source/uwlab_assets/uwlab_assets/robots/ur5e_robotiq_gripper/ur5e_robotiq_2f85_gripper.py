@@ -16,8 +16,32 @@ The following configurations are available:
 import isaaclab.sim as sim_utils
 from isaaclab.actuators import DelayedPDActuatorCfg, ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
+from isaaclab.sim.spawners.from_files.from_files import spawn_from_usd
+from isaaclab.sim.utils import get_current_stage
+from pxr import UsdPhysics
 
 from uwlab_assets import UWLAB_CLOUD_ASSETS_DIR
+
+
+_ROBOTIQ_MIMIC_JOINT_LIMITS_DEG = {
+    "right_inner_knuckle_joint": (-45.0, 0.0),
+    "right_inner_finger_knuckle_joint": (-45.0, 0.0),
+    "left_inner_finger_knuckle_joint": (-45.0, 0.0),
+    "left_inner_knuckle_joint": (0.0, 45.0),
+}
+
+
+def spawn_ur5e_robotiq_with_mimic_limits(prim_path, cfg, translation=None, orientation=None, **kwargs):
+    """Spawn the robot and author finite limits required by PhysX mimic joints."""
+    prim = spawn_from_usd(prim_path, cfg, translation=translation, orientation=orientation, **kwargs)
+    stage = get_current_stage()
+    for joint_prim in stage.Traverse():
+        if joint_prim.GetName() in _ROBOTIQ_MIMIC_JOINT_LIMITS_DEG and joint_prim.IsA(UsdPhysics.RevoluteJoint):
+            joint = UsdPhysics.RevoluteJoint(joint_prim)
+            lower, upper = _ROBOTIQ_MIMIC_JOINT_LIMITS_DEG[joint_prim.GetName()]
+            joint.CreateLowerLimitAttr(lower)
+            joint.CreateUpperLimitAttr(upper)
+    return prim
 
 ROBOTIQ_2F85_DEFAULT_JOINT_POS = {
     "finger_joint": 0.0,
@@ -58,6 +82,7 @@ UR5E_EFFORT_LIMITS = {
 
 UR5E_ARTICULATION = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
+        func=spawn_ur5e_robotiq_with_mimic_limits,
         usd_path=f"{UWLAB_CLOUD_ASSETS_DIR}/Robots/UniversalRobots/Ur5e2f85RobotiqGripperCalibrated/ur5e_robotiq_gripper_d415_mount_safety_calibrated.usd",
         activate_contact_sensors=False,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
@@ -100,6 +125,13 @@ ROBOTIQ_2F85 = ArticulationCfg(
     soft_joint_pos_limit_factor=1,
 )
 
+UR5E_ROBOTIQ_GRIPPER_ACTUATOR = ImplicitActuatorCfg(
+    joint_names_expr=["finger_joint"],
+    stiffness=1000,
+    damping=50,
+    effort_limit_sim=60,
+)
+
 EXPLICIT_UR5E_ROBOTIQ_2F85 = UR5E_ARTICULATION.copy()  # type: ignore
 EXPLICIT_UR5E_ROBOTIQ_2F85.actuators = {
     "arm": DelayedPDActuatorCfg(
@@ -113,7 +145,7 @@ EXPLICIT_UR5E_ROBOTIQ_2F85.actuators = {
         min_delay=0,
         max_delay=1,
     ),
-    "gripper": ROBOTIQ_2F85.actuators["gripper"],
+    "gripper": UR5E_ROBOTIQ_GRIPPER_ACTUATOR,
 }
 
 IMPLICIT_UR5E_ROBOTIQ_2F85 = UR5E_ARTICULATION.copy()  # type: ignore
@@ -125,5 +157,5 @@ IMPLICIT_UR5E_ROBOTIQ_2F85.actuators = {
         effort_limit_sim=UR5E_EFFORT_LIMITS,
         velocity_limit_sim=UR5E_VELOCITY_LIMITS,
     ),
-    "gripper": ROBOTIQ_2F85.actuators["gripper"],
+    "gripper": UR5E_ROBOTIQ_GRIPPER_ACTUATOR,
 }

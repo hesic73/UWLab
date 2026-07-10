@@ -575,8 +575,8 @@ class reset_end_effector_round_fixed_asset(ManagerTermBase):
     ) -> None:
         if fixed_asset_offset is None:
             fixed_tip_pos_w, fixed_tip_quat_w = (
-                env.scene[fixed_asset_cfg.name].data.root_pos_w,
-                env.scene[fixed_asset_cfg.name].data.root_quat_w,
+                env.scene[fixed_asset_cfg.name].data.root_pos_w.torch,
+                env.scene[fixed_asset_cfg.name].data.root_quat_w.torch,
             )
         else:
             fixed_tip_pos_w, fixed_tip_quat_w = self.fixed_asset_offset.apply(self.fixed_asset)
@@ -587,7 +587,7 @@ class reset_end_effector_round_fixed_asset(ManagerTermBase):
         pos_w = fixed_tip_pos_w + samples[:, 0:3]
         quat_w = math_utils.quat_from_euler_xyz(samples[:, 3], samples[:, 4], samples[:, 5])
         pos_b, quat_b = math_utils.subtract_frame_transforms(
-            self.robot.data.root_link_pos_w, self.robot.data.root_link_quat_w, pos_w, quat_w
+            self.robot.data.root_link_pos_w.torch, self.robot.data.root_link_quat_w.torch, pos_w, quat_w
         )
         self.solver.process_actions(torch.cat([pos_b, quat_b], dim=1))
 
@@ -601,6 +601,7 @@ class reset_end_effector_round_fixed_asset(ManagerTermBase):
                 joint_ids=self.joint_ids,
                 env_ids=env_ids,  # type: ignore
             )
+            env.sim.forward()
 
 
 class reset_end_effector_from_grasp_dataset(ManagerTermBase):
@@ -719,8 +720,8 @@ class reset_end_effector_from_grasp_dataset(ManagerTermBase):
     ) -> None:
         """Apply grasp poses to reset end effector."""
         # RigidObject asset
-        object_pos_w = self.fixed_asset.data.root_pos_w[env_ids]
-        object_quat_w = self.fixed_asset.data.root_quat_w[env_ids]
+        object_pos_w = self.fixed_asset.data.root_pos_w.torch[env_ids]
+        object_quat_w = self.fixed_asset.data.root_quat_w.torch[env_ids]
 
         # Randomly sample grasp indices for each environment
         num_envs = len(env_ids)
@@ -738,8 +739,8 @@ class reset_end_effector_from_grasp_dataset(ManagerTermBase):
         # Vectorized transform to robot base coordinates
         pos_b, quat_b = self.solver._compute_frame_pose()
         pos_b[env_ids], quat_b[env_ids] = math_utils.subtract_frame_transforms(
-            self.robot.data.root_link_pos_w[env_ids],
-            self.robot.data.root_link_quat_w[env_ids],
+            self.robot.data.root_link_pos_w.torch[env_ids],
+            self.robot.data.root_link_quat_w.torch[env_ids],
             gripper_pos_w,
             gripper_quat_w,
         )
@@ -766,9 +767,30 @@ class reset_end_effector_from_grasp_dataset(ManagerTermBase):
                 joint_ids=self.joint_ids,
                 env_ids=env_ids,  # type: ignore
             )
+            env.sim.forward()
 
         # Sample gripper joint positions using the same indices
         sampled_gripper_positions = self.gripper_joint_positions[grasp_indices]
+
+        # Start the stability rollout with the gripper closed. On Isaac Sim 6,
+        # allowing the drive to close from the recorded contact width gives a
+        # light object enough time to fall before contact forces settle.
+        closed_joint_positions = {
+            "finger_joint": 0.785398,
+            "right_outer_knuckle_joint": 0.785398,
+            "right_inner_knuckle_joint": -0.785398,
+            "left_inner_knuckle_joint": 0.785398,
+            "right_inner_finger_knuckle_joint": -0.785398,
+            "left_inner_finger_knuckle_joint": -0.785398,
+        }
+        for gripper_idx, robot_joint_idx in enumerate(
+            list(range(self.robot.num_joints))[self.gripper_joint_ids]
+            if isinstance(self.gripper_joint_ids, slice)
+            else self.gripper_joint_ids
+        ):
+            joint_name = self.robot.joint_names[robot_joint_idx]
+            if joint_name in closed_joint_positions:
+                sampled_gripper_positions[:, gripper_idx] = closed_joint_positions[joint_name]
 
         # Single vectorized write for all environments
         self.robot.write_joint_state_to_sim(
@@ -845,8 +867,8 @@ class reset_insertive_object_from_partial_assembly_dataset(ManagerTermBase):
     ) -> None:
         """Reset the insertive object from a partial assembly dataset."""
         # Get receptive object pose (world coordinates)
-        receptive_pos_w = self.receptive_object.data.root_pos_w[env_ids]
-        receptive_quat_w = self.receptive_object.data.root_quat_w[env_ids]
+        receptive_pos_w = self.receptive_object.data.root_pos_w.torch[env_ids]
+        receptive_quat_w = self.receptive_object.data.root_quat_w.torch[env_ids]
 
         # Randomly sample partial assembly indices for each environment
         num_envs = len(env_ids)
@@ -906,10 +928,10 @@ class pose_logging_event(ManagerTermBase):
         """Collect pose data from all environments."""
 
         # Get object poses for all environments
-        receptive_pos = self.receptive_object.data.root_pos_w[env_ids]
-        receptive_quat = self.receptive_object.data.root_quat_w[env_ids]
-        insertive_pos = self.insertive_object.data.root_pos_w[env_ids]
-        insertive_quat = self.insertive_object.data.root_quat_w[env_ids]
+        receptive_pos = self.receptive_object.data.root_pos_w.torch[env_ids]
+        receptive_quat = self.receptive_object.data.root_quat_w.torch[env_ids]
+        insertive_pos = self.insertive_object.data.root_pos_w.torch[env_ids]
+        insertive_quat = self.insertive_object.data.root_quat_w.torch[env_ids]
 
         # Calculate relative transform
         relative_pos, relative_quat = math_utils.subtract_frame_transforms(
@@ -961,8 +983,8 @@ class assembly_sampling_event(ManagerTermBase):
         """Spawn insertive object at assembled offset position."""
 
         # Get receptive object poses
-        receptive_pos = self.receptive_object.data.root_pos_w[env_ids]
-        receptive_quat = self.receptive_object.data.root_quat_w[env_ids]
+        receptive_pos = self.receptive_object.data.root_pos_w.torch[env_ids]
+        receptive_quat = self.receptive_object.data.root_quat_w.torch[env_ids]
 
         # Apply receptive assembled offset to get target position
         target_pos, target_quat = self.receptive_assembled_offset.combine(receptive_pos, receptive_quat)
