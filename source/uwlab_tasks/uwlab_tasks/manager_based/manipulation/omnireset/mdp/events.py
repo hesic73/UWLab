@@ -2047,7 +2047,7 @@ class randomize_visual_appearance_multiple_meshes(ManagerTermBase):
         """Initialize the randomization term."""
         super().__init__(cfg, env)
 
-        from isaacsim.core.utils.extensions import enable_extension
+        from isaacsim.core.experimental.utils.impl.app import enable_extension
 
         enable_extension("omni.replicator.core")
         import omni.replicator.core as rep

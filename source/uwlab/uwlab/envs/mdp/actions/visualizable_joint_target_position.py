@@ -44,7 +44,7 @@ class VisualizableJointTargetPosition(ActionTerm):
         pass
 
     def _set_debug_vis_impl(self, debug_vis: bool):
-        import isaacsim.core.utils.prims as prim_utils
+        import isaaclab.sim as prim_utils
         from pxr import UsdGeom
 
         if debug_vis:

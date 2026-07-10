@@ -83,7 +83,7 @@ class HandJointCommand(CommandTerm):
 
     def _set_debug_vis_impl(self, debug_vis: bool):
         # create markers if necessary for the first tome
-        import isaacsim.core.utils.prims as prim_utils
+        import isaaclab.sim as prim_utils
         from pxr import UsdGeom
 
         if debug_vis:

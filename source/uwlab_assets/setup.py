@@ -32,12 +32,12 @@ setup(
     license="BSD-3-Clause",
     include_package_data=True,
     install_requires=INSTALL_REQUIRES,
-    python_requires=">=3.10",
+    python_requires=">=3.12,<3.13",
     packages=["uwlab_assets"],
     classifiers=[
         "Natural Language :: English",
-        "Programming Language :: Python :: 3.10",
-        "Isaac Sim :: 4.5.0",
+        "Programming Language :: Python :: 3.12",
+        "Isaac Sim :: 6.0.0",
     ],
     zip_safe=False,
 )

@@ -173,7 +173,7 @@ class TrackGoalXarmLeap(track_goal_env.TrackGoalEnv):
         ):
             # this is necessary to visualize opacity in the raytracing
             import carb
-            import isaacsim.core.utils.carb as carb_utils
+            import isaacsim.simulation_app.utils as carb_utils
 
             self.sim.render.enable_translucency = True
             # # Access the Carb settings registry

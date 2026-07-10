@@ -20,7 +20,7 @@ INSTALL_REQUIRES = [
     "pybullet",
 ]
 
-PYTORCH_INDEX_URL = ["https://download.pytorch.org/whl/cu118"]
+PYTORCH_INDEX_URL = ["https://download.pytorch.org/whl/cu128"]
 
 # Installation operation
 setup(
@@ -33,14 +33,14 @@ setup(
     keywords=EXTENSION_TOML_DATA["package"]["keywords"],
     license="BSD-3-Clause",
     include_package_data=True,
-    python_requires=">=3.10",
+    python_requires=">=3.12,<3.13",
     install_requires=INSTALL_REQUIRES,
     dependency_links=PYTORCH_INDEX_URL,
     packages=["uwlab"],
     classifiers=[
         "Natural Language :: English",
-        "Programming Language :: Python :: 3.10",
-        "Isaac Sim :: 4.5.0",
+        "Programming Language :: Python :: 3.12",
+        "Isaac Sim :: 6.0.0",
     ],
     zip_safe=False,
 )

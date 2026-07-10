@@ -4,13 +4,13 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from isaaclab.utils import configclass
-from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoAlgorithmCfg
+from isaaclab_rl.rsl_rl import RslRlMLPModelCfg, RslRlOnPolicyRunnerCfg, RslRlPpoAlgorithmCfg
 
 from uwlab_rl.rsl_rl.rl_cfg import (
     BehaviorCloningCfg,
     OffPolicyAlgorithmCfg,
-    RslRlFancyActorCriticCfg,
     RslRlFancyPpoAlgorithmCfg,
+    RslRlGSDENoiseDistributionCfg,
 )
 
 
@@ -26,15 +26,17 @@ class Base_PPORunnerCfg(RslRlOnPolicyRunnerCfg):
     save_interval = 100
     resume = False
     experiment_name = "ur5e_robotiq_2f85_omnireset_agent"
-    policy = RslRlFancyActorCriticCfg(
-        init_noise_std=1.0,
-        actor_obs_normalization=True,
-        critic_obs_normalization=True,
-        actor_hidden_dims=[512, 256, 128, 64],
-        critic_hidden_dims=[512, 256, 128, 64],
+    obs_groups = {"actor": ["policy"], "critic": ["critic"]}
+    actor = RslRlMLPModelCfg(
+        hidden_dims=[512, 256, 128, 64],
         activation="elu",
-        noise_std_type="gsde",
-        state_dependent_std=False,
+        obs_normalization=True,
+        distribution_cfg=RslRlGSDENoiseDistributionCfg(latent_dim=64, init_std=1.0),
+    )
+    critic = RslRlMLPModelCfg(
+        hidden_dims=[512, 256, 128, 64],
+        activation="elu",
+        obs_normalization=True,
     )
     algorithm = RslRlPpoAlgorithmCfg(
         value_loss_coef=1.0,

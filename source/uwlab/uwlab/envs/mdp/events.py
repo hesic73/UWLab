@@ -40,14 +40,23 @@ def launch_view_port(
     position: tuple[int, int] = (0, 0),
 ):
     if env.sim.has_gui():
-        from isaacsim.core.utils.viewports import create_viewport_for_camera, get_viewport_names
+        import omni.kit.commands
+        from omni.kit.viewport.utility import create_viewport_window
+        from omni.kit.viewport.window import get_viewport_window_instances
 
-        if view_portname not in get_viewport_names():
-            create_viewport_for_camera(
-                viewport_name=view_portname,
-                camera_prim_path=camera_path,
+        from isaaclab.sim import is_prim_path_valid
+
+        viewport_names = [window.title for window in get_viewport_window_instances()]
+        if view_portname not in viewport_names:
+            if not is_prim_path_valid(camera_path):
+                raise ValueError(f"Invalid camera prim path: {camera_path}")
+            viewport_window = create_viewport_window(
+                name=view_portname,
                 width=viewport_size[0],
                 height=viewport_size[1],
                 position_x=position[0],
                 position_y=position[1],
+            )
+            omni.kit.commands.execute(
+                "SetViewportCamera", camera_path=camera_path, viewport_api=viewport_window.viewport_api
             )

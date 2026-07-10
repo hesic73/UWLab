@@ -12,8 +12,7 @@ category = "robotics"
 keywords = ["kit", "robotics", "learning", "ai"]
 
 [dependencies]
-"omni.isaac.core" = {}
-"omni.isaac.ml_archive" = {}
+"isaacsim.core.api" = {}
 "omni.replicator.core" = {}
 "isaaclab" = {}
 "isaaclab_assets" = {}

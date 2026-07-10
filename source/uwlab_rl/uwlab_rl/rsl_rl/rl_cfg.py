@@ -7,7 +7,24 @@ from dataclasses import MISSING
 from typing import Literal
 
 from isaaclab.utils import configclass
-from isaaclab_rl.rsl_rl import RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg  # noqa: F401
+from isaaclab_rl.rsl_rl import RslRlMLPModelCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg  # noqa: F401
+
+
+@configclass
+class RslRlGSDENoiseDistributionCfg(RslRlMLPModelCfg.DistributionCfg):
+    """Configuration for UW OmniReset generalized state-dependent exploration."""
+
+    class_name: str = "GSDENoiseDistribution"
+    """Distribution implemented by the project's RSL-RL ``omnireset`` branch."""
+
+    latent_dim: int = MISSING  # type: ignore
+    """Dimension of the actor's final hidden layer."""
+
+    init_std: float = 1.0
+    """Initial exploration standard deviation."""
+
+    epsilon: float = 1e-6
+    """Numerical stability term added to the state-dependent variance."""
 
 
 @configclass

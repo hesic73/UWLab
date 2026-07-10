@@ -13,7 +13,7 @@ from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 from isaaclab_assets import HUMANOID_CFG
-from isaaclab_tasks.direct.locomotion.locomotion_env import LocomotionEnv
+from isaaclab_tasks.core.locomotion.locomotion_direct_env import LocomotionDirectEnv
 
 
 @configclass
@@ -88,7 +88,7 @@ class HumanoidEnvCfg(DirectRLEnvCfg):
     contact_force_scale: float = 0.01
 
 
-class HumanoidEnv(LocomotionEnv):
+class HumanoidEnv(LocomotionDirectEnv):
     cfg: HumanoidEnvCfg
 
     def __init__(self, cfg: HumanoidEnvCfg, render_mode: str | None = None, **kwargs):

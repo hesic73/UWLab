@@ -8,7 +8,7 @@
 import numpy as np
 import torch
 
-import isaacsim.core.utils.bounds as bounds_utils
+import isaacsim.core.experimental.utils.impl.bounds as bounds_utils
 from isaaclab.assets import Articulation, RigidObject, RigidObjectCollection
 from isaaclab.envs import ManagerBasedEnv, ManagerBasedRLEnv
 from isaaclab.managers import ManagerTermBase, SceneEntityCfg, TerminationTermCfg

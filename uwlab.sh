@@ -43,9 +43,8 @@ install_system_deps() {
     fi
 }
 
-# Returns success (exit code 0 / "true") if the detected Isaac Sim version starts with 4.5,
-# otherwise returns non-zero ("false"). Works with both symlinked binary installs and pip installs.
-is_isaacsim_version_4_5() {
+# Print the installed Isaac Sim version. Works with both binary and pip installs.
+extract_isaacsim_version() {
     local version=""
     local python_exe
     python_exe=$(extract_python_exe)
@@ -83,8 +82,28 @@ PY
 )
     fi
 
-    # Final decision: return success if version begins with "4.5", 0 if match, 1 otherwise.
-    [[ "$version" == 4.5* ]]
+    echo "$version"
+}
+
+# Isaac Lab 3.0 targets Isaac Sim 6.0 and Python 3.12. Fail before pip can
+# partially replace a working simulator environment with incompatible packages.
+validate_isaacsim_6_env() {
+    local python_exe
+    local python_version
+    local isaacsim_version
+    python_exe=$(extract_python_exe)
+    python_version=$(${python_exe} -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+    isaacsim_version=$(extract_isaacsim_version)
+
+    if [[ "$python_version" != "3.12" ]]; then
+        echo "[ERROR] Isaac Sim 6.x requires Python 3.12; found Python ${python_version} at ${python_exe}." >&2
+        exit 1
+    fi
+    if [[ "$isaacsim_version" != 6.0.0.1* ]]; then
+        echo "[ERROR] UW Lab is configured for Isaac Sim 6.0.0.1; found '${isaacsim_version:-not installed}'." >&2
+        echo "[ERROR] Install 'isaacsim[all,extscache]==6.0.0.1' in the active environment first." >&2
+        exit 1
+    fi
 }
 
 # check if running in docker
@@ -99,51 +118,6 @@ is_docker() {
 # check if running on ARM architecture
 is_arm() {
     [[ "$(uname -m)" == "aarch64" ]] || [[ "$(uname -m)" == "arm64" ]]
-}
-
-ensure_cuda_torch() {
-    local python_exe=$(extract_python_exe)
-    local pip_install_command=$(extract_pip_command)
-    local pip_uninstall_command=$(extract_pip_uninstall_command)
-    # base index for torch
-    local base_index="https://download.pytorch.org/whl"
-
-    # choose pins per arch
-    local torch_ver tv_ver cuda_ver
-    if is_arm; then
-        torch_ver="2.9.0"
-        tv_ver="0.24.0"
-        cuda_ver="130"
-    else
-        torch_ver="2.7.0"
-        tv_ver="0.22.0"
-        cuda_ver="128"
-    fi
-
-    local index="${base_index}/cu${cuda_ver}"
-    local want_torch="${torch_ver}+cu${cuda_ver}"
-
-    # check current torch version (may be empty)
-    local cur=""
-    cur="$(${python_exe} - <<'PY' 2>/dev/null || true
-try:
-    import torch
-except Exception:
-    pass
-else:
-    print(torch.__version__, end="")
-PY
-)"
-
-    # skip install if version is already satisfied
-    if [[ "$cur" == "$want_torch" ]]; then
-        return 0
-    fi
-
-    # clean install torch
-    echo "[INFO] Installing torch==${torch_ver} and torchvision==${tv_ver} (cu${cuda_ver}) from ${index}..."
-    ${pip_uninstall_command} torch torchvision torchaudio >/dev/null 2>&1 || true
-    ${pip_install_command} -U --index-url "${index}" "torch==${torch_ver}" "torchvision==${tv_ver}"
 }
 
 # extract isaac sim path
@@ -272,6 +246,51 @@ install_uwlab_extension() {
     fi
 }
 
+# Build PyTorch3D against the active Torch/CUDA ABI. Python 3.12 + Torch 2.11
+# has no compatible prebuilt PyTorch3D wheel, and its build imports torch, so
+# PEP 517 build isolation cannot be used.
+ensure_pytorch3d() {
+    local python_exe
+    local pip_command
+    python_exe=$(extract_python_exe)
+    pip_command=$(extract_pip_command)
+
+    if "${python_exe}" -c 'import torch; from pytorch3d import _C' >/dev/null 2>&1; then
+        echo "[INFO] PyTorch3D with compiled extensions is already installed."
+        return 0
+    fi
+
+    local torch_cuda
+    torch_cuda=$("${python_exe}" -c 'import torch; print(torch.version.cuda or "")')
+    if [[ "$torch_cuda" != 12.8* ]]; then
+        echo "[ERROR] PyTorch3D build expects the Isaac Lab Torch cu128 build; found CUDA '${torch_cuda}'." >&2
+        exit 1
+    fi
+
+    local cuda_root="/usr/local/cuda-12.8"
+    if [[ ! -x "${cuda_root}/bin/nvcc" ]] || ! "${cuda_root}/bin/nvcc" --version | grep -q 'release 12.8'; then
+        echo "[ERROR] PyTorch3D requires the system CUDA 12.8 toolkit at ${cuda_root}." >&2
+        echo "[ERROR] Install it with: sudo apt install cuda-toolkit-12-8" >&2
+        exit 1
+    fi
+
+    local pytorch3d_ref="${UWLAB_PYTORCH3D_REF:-c8fcd83ff96fa0a5893c0b994f9285d7aa772540}"
+    echo "[INFO] Building required PyTorch3D (${pytorch3d_ref}) for Torch ${torch_cuda}, sm_120 ..."
+    CUDA_HOME="${cuda_root}" \
+    CC=/usr/bin/gcc-11 \
+    CXX=/usr/bin/g++-11 \
+    FORCE_CUDA=1 \
+    TORCH_CUDA_ARCH_LIST=12.0 \
+    MAX_JOBS="${MAX_JOBS:-8}" \
+        ${pip_command} --no-build-isolation \
+        "pytorch3d @ git+https://github.com/facebookresearch/pytorch3d.git@${pytorch3d_ref}"
+
+    "${python_exe}" -c 'import torch; from pytorch3d import _C' || {
+        echo "[ERROR] PyTorch3D installed but its compiled extension could not be imported." >&2
+        exit 1
+    }
+}
+
 # Resolve Torch-bundled libgomp and prepend to LD_PRELOAD, once per shell session
 write_torch_gomp_hooks() {
   mkdir -p "${CONDA_PREFIX}/etc/conda/activate.d" "${CONDA_PREFIX}/etc/conda/deactivate.d"
@@ -356,20 +375,7 @@ setup_conda_env() {
         echo -e "[INFO] Creating conda environment named '${env_name}'..."
         echo -e "[INFO] Installing dependencies from ${UWLAB_PATH}/environment.yml"
 
-        # patch Python version if needed, but back up first
-        cp "${UWLAB_PATH}/environment.yml"{,.bak}
-        if is_isaacsim_version_4_5; then
-            echo "[INFO] Detected Isaac Sim 4.5 → forcing python=3.10"
-            sed -i 's/^  - python=3\.11/  - python=3.10/' "${UWLAB_PATH}/environment.yml"
-        else
-            echo "[INFO] Isaac Sim >= 5.0 detected, installing python=3.11"
-        fi
-
         conda env create -y --file ${UWLAB_PATH}/environment.yml -n ${env_name}
-        # (optional) restore original environment.yml:
-        if [[ -f "${UWLAB_PATH}/environment.yml.bak" ]]; then
-            mv "${UWLAB_PATH}/environment.yml.bak" "${UWLAB_PATH}/environment.yml"
-        fi
     fi
 
     # cache current paths for later
@@ -562,6 +568,7 @@ while [[ $# -gt 0 ]]; do
     # read the key
     case "$1" in
         -i|--install)
+            validate_isaacsim_6_env
             # install system dependencies first
             install_system_deps
             # install the python packages in UWLab/source directory
@@ -574,29 +581,52 @@ while [[ $# -gt 0 ]]; do
             # LD_PRELOAD is restored below, after installation
             begin_arm_install_sandbox
 
-            # install pytorch (version based on arch)
-            ensure_cuda_torch
-            # recursively look into directories and install them
-            # this does not check dependencies between extensions
+            # Recursively look into UW Lab directories and install them.
             export -f extract_python_exe
             export -f extract_pip_command
             export -f extract_pip_uninstall_command
             export -f install_uwlab_extension
-            # --- NEW: install upstream isaaclab (GitHub main, editable) ---
-            echo "[INFO] Installing upstream IsaacLab packages from GitHub (main) in editable mode into ${UWLAB_PATH}/_isaaclab ..."
+            # Isaac Sim 6.0 requires Isaac Lab 3.0. The legacy main branch is
+            # Isaac Lab 2.x and only supports Isaac Sim through 5.1.
+            isaaclab_ref="${UWLAB_ISAACLAB_REF:-develop}"
+            echo "[INFO] Installing upstream Isaac Lab 3.0 (${isaaclab_ref}) into ${UWLAB_PATH}/_isaaclab ..."
             repo_root="${UWLAB_PATH}/_isaaclab/IsaacLab"
             mkdir -p "${UWLAB_PATH}/_isaaclab"
             if [ ! -d "${repo_root}/.git" ]; then
-                echo "[INFO] Cloning IsaacLab repository (branch: main) into ${repo_root} ..."
-                git clone --depth 1 --branch main https://github.com/isaac-sim/IsaacLab.git "${repo_root}"
+                git clone --depth 1 --branch "${isaaclab_ref}" https://github.com/isaac-sim/IsaacLab.git "${repo_root}"
             else
-                echo "[INFO] Found existing IsaacLab clone at ${repo_root}; using it."
+                if [ -n "$(git -C "${repo_root}" status --porcelain)" ]; then
+                    echo "[ERROR] ${repo_root} has local changes; refusing to change its Isaac Lab revision." >&2
+                    echo "[ERROR] Commit/stash those changes, or remove this generated dependency checkout and retry." >&2
+                    exit 1
+                fi
+                echo "[INFO] Updating existing Isaac Lab checkout to ${isaaclab_ref} ..."
+                git -C "${repo_root}" fetch --depth 1 origin "${isaaclab_ref}"
+                git -C "${repo_root}" checkout --detach FETCH_HEAD
             fi
-            ${pip_command} -e "${repo_root}/source/isaaclab" --extra-index-url https://pypi.nvidia.com
-            ${pip_command} -e "${repo_root}/source/isaaclab_assets" --extra-index-url https://pypi.nvidia.com
-            ${pip_command} -e "${repo_root}/source/isaaclab_tasks" --extra-index-url https://pypi.nvidia.com
-            ${pip_command} -e "${repo_root}/source/isaaclab_rl[all]" --extra-index-url https://pypi.nvidia.com
-            echo "[INFO] Upstream IsaacLab packages installed (editable) from local clone at ${repo_root}."
+            # Delegate the centralized Isaac Lab 3.0 dependency set (including
+            # the matching Torch build) to its own installer. UW Lab installs
+            # its chosen RL framework below.
+            "${repo_root}/isaaclab.sh" --install core
+            # Isaac Sim 6.0.0.1 declares the complete Torch trio. Isaac Lab's
+            # current installer pins torch/torchvision but does not install
+            # torchaudio, so complete the matching cu128 stack here.
+            ${pip_command} --index-url https://download.pytorch.org/whl/cu128 "torchaudio==2.11.0"
+            # Isaac Lab develop currently upgrades several packages beyond the
+            # versions embedded in Isaac Sim 6.0.0.1. Restore the simulator's
+            # native ABI pins; the PhysX workflow remains compatible with them.
+            ${pip_command} \
+                "typing_extensions==4.12.2" \
+                "llvmlite==0.46.0" \
+                "numba==0.63.1" \
+                "onnx==1.19.1" \
+                "newton[sim]==1.2.0" \
+                "newton-usd-schemas==0.2.0"
+            if [ -n "${CONDA_PREFIX:-}" ]; then
+                write_torch_gomp_hooks
+            fi
+            echo "[INFO] Upstream Isaac Lab 3.0 core installed from ${repo_root}."
+            ensure_pytorch3d
             # source directory
             find -L "${UWLAB_PATH}/source" -mindepth 1 -maxdepth 1 -type d -exec bash -c 'install_uwlab_extension "{}"' \;
             # install the python packages for supported reinforcement learning frameworks
@@ -615,11 +645,9 @@ while [[ $# -gt 0 ]]; do
                 shift # past argument
             fi
             # install the learning frameworks specified
-            ${pip_command} -e "${UWLAB_PATH}/source/uwlab_rl[${framework_name}]"
-
-            # in some rare cases, torch might not be installed properly by setup.py, add one more check here
-            # can prevent that from happening
-            ensure_cuda_torch
+            if [ "${framework_name}" != "none" ]; then
+                ${pip_command} -e "${UWLAB_PATH}/source/uwlab_rl[${framework_name}]"
+            fi
 
             # restore LD_PRELOAD if we cleared it
             end_arm_install_sandbox

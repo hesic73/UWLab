@@ -6,7 +6,7 @@
 import math
 
 import isaaclab.sim as sim_utils
-import isaaclab_tasks.manager_based.classic.cartpole.mdp as mdp
+import isaaclab_tasks.core.cartpole.mdp as mdp
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.managers import EventTermCfg as EventTerm

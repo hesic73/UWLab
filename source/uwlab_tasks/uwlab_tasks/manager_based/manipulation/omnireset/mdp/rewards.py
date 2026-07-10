@@ -59,12 +59,12 @@ class ee_asset_distance_tanh(ManagerTermBase):
         std: float = 0.1,
     ) -> torch.Tensor:
         root_asset_alignment_pos_w, root_asset_alignment_quat_w = self.root_asset_offset.combine(
-            self.root_asset.data.body_link_pos_w[:, root_asset_cfg.body_ids].view(-1, 3),
-            self.root_asset.data.body_link_quat_w[:, root_asset_cfg.body_ids].view(-1, 4),
+            self.root_asset.data.body_link_pos_w.torch[:, root_asset_cfg.body_ids].view(-1, 3),
+            self.root_asset.data.body_link_quat_w.torch[:, root_asset_cfg.body_ids].view(-1, 4),
         )
         if self.target_asset_offset is None:
-            target_asset_alignment_pos_w = self.target_asset.data.root_pos_w.view(-1, 3)
-            target_asset_alignment_quat_w = self.target_asset.data.root_quat_w.view(-1, 4)
+            target_asset_alignment_pos_w = self.target_asset.data.root_pos_w.torch.view(-1, 3)
+            target_asset_alignment_quat_w = self.target_asset.data.root_quat_w.torch.view(-1, 4)
         else:
             target_asset_alignment_pos_w, target_asset_alignment_quat_w = self.target_asset_offset.apply(
                 self.target_asset
@@ -198,7 +198,7 @@ def joint_vel_l2_clamped(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = Sce
     """
     # extract the used quantities (to enable type-hinting)
     asset: Articulation = env.scene[asset_cfg.name]
-    return torch.clamp(torch.sum(torch.square(asset.data.joint_vel[:, asset_cfg.joint_ids]), dim=1), 0, 1e4)
+    return torch.clamp(torch.sum(torch.square(asset.data.joint_vel.torch[:, asset_cfg.joint_ids]), dim=1), 0, 1e4)
 
 
 class collision_free(ManagerTermBase):

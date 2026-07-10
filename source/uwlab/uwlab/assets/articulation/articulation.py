@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 import isaaclab.utils.math as math_utils
 import isaaclab.utils.string as string_utils
-import isaacsim.core.utils.stage as stage_utils
+import isaaclab.sim as stage_utils
 import omni.log
 from isaaclab.actuators import ActuatorBase, ActuatorBaseCfg, ImplicitActuator
 from isaaclab.utils.types import ArticulationActions

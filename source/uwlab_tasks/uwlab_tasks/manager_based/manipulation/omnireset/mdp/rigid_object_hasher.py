@@ -7,8 +7,8 @@ import hashlib
 import numpy as np
 import torch
 
-import isaacsim.core.utils.prims as prim_utils
-import isaacsim.core.utils.stage as stage_utils
+import isaaclab.sim as prim_utils
+import isaaclab.sim as stage_utils
 import warp as wp
 from isaaclab.sim import get_all_matching_child_prims
 from pxr import Gf, Usd, UsdGeom, UsdPhysics

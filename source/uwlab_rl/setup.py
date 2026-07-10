@@ -19,15 +19,21 @@ EXTENSION_TOML_DATA = toml.load(os.path.join(EXTENSION_PATH, "config", "extensio
 # Minimum dependencies required prior to installation
 INSTALL_REQUIRES = [
     # generic
-    "wandb>=0.19.6",
+    # Keep click compatible with Isaac Sim 6.0.0.1 while allowing protobuf 6,
+    # which is required by Isaac Lab 3.0's TensorBoard version.
+    "wandb==0.20.1",
+    "click==8.1.7",
+    "protobuf>=6.31.1,<7",
 ]
 
-PYTORCH_INDEX_URL = ["https://download.pytorch.org/whl/cu118"]
+PYTORCH_INDEX_URL = ["https://download.pytorch.org/whl/cu128"]
 
 # Extra dependencies for RL agents
 EXTRAS_REQUIRE = {
     "rsl-rl": [
-        "rsl-rl-lib @ git+https://github.com/UW-Lab/rsl_rl.git@main",
+        # RSL-RL 5.4.1 plus the UW OmniReset gSDE distribution, maintained on
+        # the project owner's long-lived integration branch.
+        "rsl-rl-lib @ git+https://github.com/hesic73/rsl_rl.git@omnireset",
     ],
 }
 
@@ -47,15 +53,15 @@ setup(
     keywords=EXTENSION_TOML_DATA["package"]["keywords"],
     license="BSD-3-Clause",
     include_package_data=True,
-    python_requires=">=3.10",
+    python_requires=">=3.12,<3.13",
     install_requires=INSTALL_REQUIRES,
     dependency_links=PYTORCH_INDEX_URL,
     extras_require=EXTRAS_REQUIRE,
     packages=["uwlab_rl"],
     classifiers=[
         "Natural Language :: English",
-        "Programming Language :: Python :: 3.10",
-        "Isaac Sim :: 4.5.0",
+        "Programming Language :: Python :: 3.12",
+        "Isaac Sim :: 6.0.0",
     ],
     zip_safe=False,
 )

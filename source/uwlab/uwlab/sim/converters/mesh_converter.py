@@ -6,7 +6,7 @@
 import asyncio
 import os
 
-import isaacsim.core.utils.prims as prim_utils
+import isaaclab.sim as prim_utils
 import omni
 import omni.kit.commands
 from isaaclab.sim.converters.asset_converter_base import AssetConverterBase

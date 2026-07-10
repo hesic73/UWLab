@@ -21,7 +21,7 @@ from pathlib import PurePosixPath
 from urllib.parse import urlparse
 
 import isaaclab.utils.math as math_utils
-import isaacsim.core.utils.torch as torch_utils
+from isaaclab.utils.seed import configure_seed
 import omni
 import warp as wp
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, NVIDIA_NUCLEUS_DIR, retrieve_file_path
@@ -295,7 +295,7 @@ def temporary_seed(seed: int, restore_numpy: bool = True, restore_python: bool =
     try:
         sink = io.StringIO()
         with redirect_stdout(sink), redirect_stderr(sink):
-            torch_utils.set_seed(seed)
+            configure_seed(seed)
         yield
     finally:
         # restore everything

@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-import isaaclab_tasks.manager_based.classic.cartpole.mdp.symmetry as symmetry
+import isaaclab_tasks.core.cartpole.mdp.symmetry as symmetry
 from isaaclab.utils import configclass
 from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg, RslRlSymmetryCfg
 
